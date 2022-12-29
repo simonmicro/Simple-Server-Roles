@@ -15,8 +15,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 
 import static net.minecraft.server.command.CommandManager.*;
 
@@ -25,11 +29,22 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 public class SimpleServerRoles implements ModInitializer {
 	public static final String MOD_ID = "simple_server_roles";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 	public static final String TEAM_NAME_PREFIX = MOD_ID + ".";
+
+	private class RoleEditAttributeSuggestions implements SuggestionProvider<ServerCommandSource> {
+        @Override
+        public CompletableFuture<Suggestions> getSuggestions(CommandContext<ServerCommandSource> context, SuggestionsBuilder builder) {
+			builder.suggest("name");
+			builder.suggest("color");
+    
+            return builder.buildFuture();
+        }
+    }
 
 	private String makeMD5(String string) {
 		String ret = "";
@@ -54,10 +69,25 @@ public class SimpleServerRoles implements ModInitializer {
 		return player;
 	}
 
-	private String validateRoleNameString(String name) throws CommandSyntaxException {
+	private String checkRoleName(String name) throws CommandSyntaxException {
 		if(name.length() > 32)
 			throw new SimpleCommandExceptionType(Text.of("role name is too long")).create();
 		return name;
+	}
+
+	private Team checkPlayerInRole(ServerCommandSource source) throws CommandSyntaxException {
+		Scoreboard scoreboard = source.getServer().getScoreboard();
+		ServerPlayerEntity player = this.getPlayer(source);
+
+		// Check if in a team
+		Team team = scoreboard.getPlayerTeam(player.getName().getString());
+		if(team == null)
+			throw new SimpleCommandExceptionType(Text.of("you are not in a role")).create();
+
+		// Make sure the team is a role
+		if(!team.getName().startsWith(TEAM_NAME_PREFIX))
+			throw new SimpleCommandExceptionType(Text.of("you are not in a role, you are in a normal team")).create();
+		return team;
 	}
 
 	private void joinRole(ServerCommandSource source, Team team) throws CommandSyntaxException {
@@ -79,14 +109,7 @@ public class SimpleServerRoles implements ModInitializer {
 		Scoreboard scoreboard = source.getServer().getScoreboard();
 		ServerPlayerEntity player = this.getPlayer(source);
 
-		// Check if in a team
-		Team team = scoreboard.getPlayerTeam(player.getName().getString());
-		if(team == null)
-			throw new SimpleCommandExceptionType(Text.of("you are not in a role")).create();
-
-		// Make sure the team is a role
-		if(!team.getName().startsWith(TEAM_NAME_PREFIX))
-			throw new SimpleCommandExceptionType(Text.of("you are not in a role, you are in a normal team")).create();
+		Team team = this.checkPlayerInRole(source);
 
 		// Leave team
 		scoreboard.removePlayerFromTeam(player.getName().getString(), team);
@@ -109,10 +132,10 @@ public class SimpleServerRoles implements ModInitializer {
 			
 			// TODO handling for no teams
 
-			context.getSource().sendFeedback(Text.of("Available roles are:"), false);
+			source.sendFeedback(Text.of("Available roles are:"), false);
 			for(Team team : scoreboard.getTeams()) {
 				if(team.getName().startsWith(TEAM_NAME_PREFIX)) {
-					context.getSource().sendFeedback(Text.of("- " + team.getDisplayName().getString()), false);
+					source.sendFeedback(Text.of("- " + team.getDisplayName().getString()), false);
 				}
 			}
 
@@ -126,7 +149,7 @@ public class SimpleServerRoles implements ModInitializer {
 			MinecraftServer server = source.getServer();
 			Scoreboard scoreboard = server.getScoreboard();
 			
-			String name = this.validateRoleNameString(StringArgumentType.getString(context, "name"));
+			String name = this.checkRoleName(StringArgumentType.getString(context, "name"));
 			String id = TEAM_NAME_PREFIX + this.makeMD5(name);
 			
 			// check if already exists
@@ -139,7 +162,7 @@ public class SimpleServerRoles implements ModInitializer {
 			team.setDisplayName(Text.of(name));
 			team.setPrefix(Text.of("[" + name + "] "));
 			team.setColor(net.minecraft.util.Formatting.RED); // TODO default color is random?
-			context.getSource().sendFeedback(Text.of("Added role " + name), false);
+			source.sendFeedback(Text.of("Added role " + name), false);
 
 			// join team
 			this.joinRole(source, team);
@@ -154,7 +177,7 @@ public class SimpleServerRoles implements ModInitializer {
 			MinecraftServer server = source.getServer();
 			Scoreboard scoreboard = server.getScoreboard();
 
-			String name = this.validateRoleNameString(StringArgumentType.getString(context, "name"));
+			String name = this.checkRoleName(StringArgumentType.getString(context, "name"));
 			String id = TEAM_NAME_PREFIX + this.makeMD5(name);
 			
 			// check if exists
@@ -173,8 +196,32 @@ public class SimpleServerRoles implements ModInitializer {
 			}
 		))));
 
+		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(
+			literal("roles").then(literal("edit")
+				.then(CommandManager.argument("property", StringArgumentType.word()).suggests(new RoleEditAttributeSuggestions())
+				.then(CommandManager.argument("value", StringArgumentType.string()).executes(context -> {
+				ServerCommandSource source = context.getSource();
+
+				Team team = this.checkPlayerInRole(source);
+
+				String property = this.checkRoleName(StringArgumentType.getString(context, "property"));
+				String value = this.checkRoleName(StringArgumentType.getString(context, "value"));
+				if(property.equals("name")) {
+					this.checkRoleName(value);
+					team.setDisplayName(Text.of(value));
+					team.setPrefix(Text.of("[" + value + "] "));
+					source.sendFeedback(Text.of("Changed role name to " + value), false);
+				} else if(property.equals("color")) {
+					// TODO
+					source.sendFeedback(Text.of("Not implemented"), false);
+				} else
+					throw new SimpleCommandExceptionType(Text.of("unknown property")).create();
+				return 1;
+			}
+		))))));
+
 		// Show welcome message to joined players
-		Set<ServerPlayerEntity> knownPlayers = new HashSet();
+		Set<ServerPlayerEntity> knownPlayers = new HashSet<>();
 		ServerTickEvents.START_SERVER_TICK.register(server -> {
 			// I'm so sorry to use the server tick for this, but Fabric doesn't have a PlayerJoinEvent
 			for(ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
@@ -183,7 +230,7 @@ public class SimpleServerRoles implements ModInitializer {
 					Team team = server.getScoreboard().getPlayerTeam(player.getName().getString());
 					if(team != null && team.getName().startsWith(TEAM_NAME_PREFIX) && team.getPlayerList().size() > 2) { // Print only if part of a role with at leat one other player
 						// Get list of online players
-						LinkedList<String> teamMembers = new LinkedList();
+						LinkedList<String> teamMembers = new LinkedList<>();
 						for(String playerName: team.getPlayerList()) {
 							if(playerName.equals(player.getName().getString()))
 								continue;
@@ -204,9 +251,7 @@ public class SimpleServerRoles implements ModInitializer {
 			}
 		});
 
-		// IDEA roles edit <name> <color|name> <value>
 		// TODO add edit for color
-		// TODO add edit for displayname
 		// TODO add edit for style (bold, italic, etc)
 	}
 }
