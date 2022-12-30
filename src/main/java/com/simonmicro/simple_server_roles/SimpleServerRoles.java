@@ -138,14 +138,16 @@ public class SimpleServerRoles implements ModInitializer {
 			MinecraftServer server = source.getServer();
 			Scoreboard scoreboard = server.getScoreboard();
 			
-			// TODO handling for no teams
+			List<Team> roles = scoreboard.getTeams().stream().filter(team -> team.getName().startsWith(TEAM_NAME_PREFIX)).collect(Collectors.toList());
+			if(roles.isEmpty()) {
+				source.sendFeedback(Text.of("There are no roles"), false);
+				return 1;
+			}
 
 			source.sendFeedback(Text.of("Available roles are:"), false);
-			for(Team team : scoreboard.getTeams()) {
-				if(team.getName().startsWith(TEAM_NAME_PREFIX)) {
+			for(Team team : scoreboard.getTeams())
+				if(team.getName().startsWith(TEAM_NAME_PREFIX))
 					source.sendFeedback(Text.of("- " + team.getDisplayName().getString()), false);
-				}
-			}
 
 			return 1;
 		}))));
