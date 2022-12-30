@@ -3,18 +3,18 @@
   "id": "simple_server_roles",
   "version": "${version}",
 
-  "name": "Example Mod",
-  "description": "This is an example description! Tell everyone what your mod is about!",
+  "name": "Simple Server Roles",
+  "description": "A Fabric mod, which allows players to self-manage their roles (teams)",
   "authors": [
-    "Me!"
+    "simonmicro"
   ],
   "contact": {
-    "homepage": "https://fabricmc.net/",
-    "sources": "https://github.com/FabricMC/fabric-example-mod"
+    "homepage": "https://simonmicro.de/",
+    "sources": "https://gitlab.simonmicro.de/minecraft-modding/simple-server-roles"
   },
 
-  "license": "CC0-1.0",
-  "icon": "assets/modid/icon.png",
+  "license": "AGPL-3",
+  "icon": "assets/simple_server_roles/icon.png",
 
   "environment": "*",
   "entrypoints": {
@@ -30,7 +30,5 @@
     "minecraft": "~1.19.3",
     "java": ">=17"
   },
-  "suggests": {
-    "another-mod": "*"
-  }
+  "suggests": {}
 }
