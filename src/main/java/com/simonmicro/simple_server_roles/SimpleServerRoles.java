@@ -52,6 +52,17 @@ public class SimpleServerRoles implements ModInitializer {
         }
     }
 
+	private class RoleNameAttributeSuggestions implements SuggestionProvider<ServerCommandSource> {
+        @Override
+        public CompletableFuture<Suggestions> getSuggestions(CommandContext<ServerCommandSource> context, SuggestionsBuilder builder) {
+			List<Team> roles = context.getSource().getServer().getScoreboard().getTeams().stream().filter(team -> team.getName().startsWith(TEAM_NAME_PREFIX)).collect(Collectors.toList());
+			for(Team role : roles)
+				builder.suggest(role.getDisplayName().getString());
+    
+            return builder.buildFuture();
+        }
+    }
+
 	private String makeMD5(String string) {
 		String ret = "";
 		try {
@@ -78,7 +89,7 @@ public class SimpleServerRoles implements ModInitializer {
 	private String checkRoleName(String name) throws CommandSyntaxException {
 		if(name.length() > 32)
 			throw new SimpleCommandExceptionType(Text.of("Role name is too long")).create();
-		if(name.length() < 4)
+		if(name.length() < 3)
 			throw new SimpleCommandExceptionType(Text.of("Role name is too short")).create();
 		return name;
 	}
@@ -184,7 +195,7 @@ public class SimpleServerRoles implements ModInitializer {
 
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(
 			literal("roles").then(
-				literal("join").then(CommandManager.argument("name", StringArgumentType.string()).executes(context -> {
+				literal("join").then(CommandManager.argument("name", StringArgumentType.string()).suggests(new RoleNameAttributeSuggestions()).executes(context -> {
 			ServerCommandSource source = context.getSource();
 			MinecraftServer server = source.getServer();
 			Scoreboard scoreboard = server.getScoreboard();
