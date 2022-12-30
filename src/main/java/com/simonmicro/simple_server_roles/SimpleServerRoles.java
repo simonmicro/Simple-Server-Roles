@@ -10,6 +10,7 @@ import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,15 +27,20 @@ import static net.minecraft.server.command.CommandManager.*;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ConcurrentModificationException;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 public class SimpleServerRoles implements ModInitializer {
 	public static final String MOD_ID = "simple_server_roles";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 	public static final String TEAM_NAME_PREFIX = MOD_ID + ".";
+	private Random randomGenerator = new Random();
 
 	private class RoleEditAttributeSuggestions implements SuggestionProvider<ServerCommandSource> {
         @Override
@@ -72,6 +78,8 @@ public class SimpleServerRoles implements ModInitializer {
 	private String checkRoleName(String name) throws CommandSyntaxException {
 		if(name.length() > 32)
 			throw new SimpleCommandExceptionType(Text.of("role name is too long")).create();
+		if(name.length() < 4)
+			throw new SimpleCommandExceptionType(Text.of("role name is too short")).create();
 		return name;
 	}
 
@@ -161,7 +169,8 @@ public class SimpleServerRoles implements ModInitializer {
 			team = scoreboard.addTeam(id);
 			team.setDisplayName(Text.of(name));
 			team.setPrefix(Text.of("[" + name + "] "));
-			team.setColor(net.minecraft.util.Formatting.RED); // TODO default color is random?
+			List<String> colors = Formatting.getNames(true, false).stream().collect(Collectors.toCollection(LinkedList::new));
+			team.setColor(Formatting.byName(colors.get(this.randomGenerator.nextInt(colors.size())))); // It is assumed, that at least one color exists
 			source.sendFeedback(Text.of("Added role " + name), false);
 
 			// join team
@@ -212,8 +221,13 @@ public class SimpleServerRoles implements ModInitializer {
 					team.setPrefix(Text.of("[" + value + "] "));
 					source.sendFeedback(Text.of("Changed role name to " + value), false);
 				} else if(property.equals("color")) {
-					// TODO
-					source.sendFeedback(Text.of("Not implemented"), false);
+					Formatting color = Formatting.byName(value);
+					if(color == null)
+						throw new SimpleCommandExceptionType(Text.of("unknown color - try one of " + String.join(", ", Formatting.getNames(true, false)))).create();
+					if(!color.isColor())
+						throw new SimpleCommandExceptionType(Text.of("value is not a color")).create();
+					team.setColor(color);
+					source.sendFeedback(Text.of("Changed role color to " + color.name()), false);
 				} else
 					throw new SimpleCommandExceptionType(Text.of("unknown property")).create();
 				return 1;
@@ -223,35 +237,36 @@ public class SimpleServerRoles implements ModInitializer {
 		// Show welcome message to joined players
 		Set<ServerPlayerEntity> knownPlayers = new HashSet<>();
 		ServerTickEvents.START_SERVER_TICK.register(server -> {
-			// I'm so sorry to use the server tick for this, but Fabric doesn't have a PlayerJoinEvent
-			for(ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-				if(knownPlayers.add(player)) {
-					// Is the player part of a role?
-					Team team = server.getScoreboard().getPlayerTeam(player.getName().getString());
-					if(team != null && team.getName().startsWith(TEAM_NAME_PREFIX) && team.getPlayerList().size() > 2) { // Print only if part of a role with at leat one other player
-						// Get list of online players
-						LinkedList<String> teamMembers = new LinkedList<>();
-						for(String playerName: team.getPlayerList()) {
-							if(playerName.equals(player.getName().getString()))
-								continue;
-							if(server.getPlayerManager().getPlayerList().contains(server.getPlayerManager().getPlayer(playerName))) {
-								teamMembers.add("§a" + playerName + "§f");
-							} else {
-								teamMembers.add("§4" + playerName + "§f");
+			try {
+				// I'm so sorry to use the server tick for this, but Fabric doesn't have a PlayerJoinEvent
+				for(ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+					if(knownPlayers.add(player)) {
+						// Is the player part of a role?
+						Team team = server.getScoreboard().getPlayerTeam(player.getName().getString());
+						if(team != null && team.getName().startsWith(TEAM_NAME_PREFIX) && team.getPlayerList().size() > 2) { // Print only if part of a role with at leat one other player
+							// Get list of online players
+							LinkedList<String> teamMembers = new LinkedList<>();
+							for(String playerName: team.getPlayerList()) {
+								if(playerName.equals(player.getName().getString()))
+									continue;
+								if(server.getPlayerManager().getPlayerList().contains(server.getPlayerManager().getPlayer(playerName))) {
+									teamMembers.add(Formatting.FORMATTING_CODE_PREFIX + Formatting.GREEN.getCode() + playerName + Formatting.FORMATTING_CODE_PREFIX + Formatting.WHITE.getCode());
+								} else {
+									teamMembers.add(Formatting.FORMATTING_CODE_PREFIX + Formatting.DARK_RED.getCode() + playerName + Formatting.FORMATTING_CODE_PREFIX + Formatting.WHITE.getCode());
+								}
 							}
+							player.sendMessage(Text.of("Welcome! Here are the members of your role: " + String.join(", ", teamMembers)), false);
 						}
-						player.sendMessage(Text.of("Welcome! Here are the members of your role: " + String.join(",", teamMembers)), false);
 					}
 				}
-			}
-			for(ServerPlayerEntity player : knownPlayers) {
-				if(!server.getPlayerManager().getPlayerList().contains(player)) {
-					knownPlayers.remove(player);
+				for(ServerPlayerEntity player : knownPlayers) {
+					if(!server.getPlayerManager().getPlayerList().contains(player)) {
+						knownPlayers.remove(player);
+					}
 				}
+			} catch(ConcurrentModificationException e) {
+				// Ignore, maybe a player just left...
 			}
 		});
-
-		// TODO add edit for color
-		// TODO add edit for style (bold, italic, etc)
 	}
 }
