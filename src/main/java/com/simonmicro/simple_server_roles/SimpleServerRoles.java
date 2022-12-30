@@ -62,7 +62,7 @@ public class SimpleServerRoles implements ModInitializer {
 				ret += Integer.toHexString((b & 0xFF) | 0x100).substring(1, 3);
 			}
 		} catch(NoSuchAlgorithmException e) {
-			LOGGER.error("MD5 not found");
+			LOGGER.error("MD5 not found!");
 			return null;
 		}
 		return ret;
@@ -71,15 +71,15 @@ public class SimpleServerRoles implements ModInitializer {
 	private ServerPlayerEntity getPlayer(ServerCommandSource source) throws CommandSyntaxException {
 		ServerPlayerEntity player = source.getPlayer();
 		if(player == null)
-			throw new SimpleCommandExceptionType(Text.of("internal error: player ref is null (this is a bug)")).create();
+			throw new SimpleCommandExceptionType(Text.of("Internal error: player reference is null (this is a bug)")).create();
 		return player;
 	}
 
 	private String checkRoleName(String name) throws CommandSyntaxException {
 		if(name.length() > 32)
-			throw new SimpleCommandExceptionType(Text.of("role name is too long")).create();
+			throw new SimpleCommandExceptionType(Text.of("Role name is too long")).create();
 		if(name.length() < 4)
-			throw new SimpleCommandExceptionType(Text.of("role name is too short")).create();
+			throw new SimpleCommandExceptionType(Text.of("Role name is too short")).create();
 		return name;
 	}
 
@@ -90,11 +90,11 @@ public class SimpleServerRoles implements ModInitializer {
 		// Check if in a team
 		Team team = scoreboard.getPlayerTeam(player.getName().getString());
 		if(team == null)
-			throw new SimpleCommandExceptionType(Text.of("you are not in a role")).create();
+			throw new SimpleCommandExceptionType(Text.of("You are not in a role")).create();
 
 		// Make sure the team is a role
 		if(!team.getName().startsWith(TEAM_NAME_PREFIX))
-			throw new SimpleCommandExceptionType(Text.of("you are not in a role, you are in a normal team")).create();
+			throw new SimpleCommandExceptionType(Text.of("You are not in a role (you are in a normal team)")).create();
 		return team;
 	}
 
@@ -110,7 +110,7 @@ public class SimpleServerRoles implements ModInitializer {
 		// add player to team
 		if(!scoreboard.addPlayerToTeam(player.getName().getString(), team))
 			LOGGER.warn("Failed to add player to team");
-			source.sendFeedback(Text.of("Joined role " + team.getDisplayName().getString()), false);
+		source.sendFeedback(Text.of("Joined role \"" + team.getDisplayName().getString() + "\""), false);
 	}
 
 	private void leaveRole(ServerCommandSource source) throws CommandSyntaxException {
@@ -121,12 +121,12 @@ public class SimpleServerRoles implements ModInitializer {
 
 		// Leave team
 		scoreboard.removePlayerFromTeam(player.getName().getString(), team);
-		source.sendFeedback(Text.of("Left role " + team.getDisplayName().getString()), false);
+		source.sendFeedback(Text.of("Left role \"" + team.getDisplayName().getString() + "\""), false);
 			
 		// Destroy team if empty
 		if(team.getPlayerList().isEmpty()) {
 			scoreboard.removeTeam(team);
-			source.sendFeedback(Text.of("Removed role " + team.getDisplayName().getString() + ", because it has no members anymore."), false);
+			source.sendFeedback(Text.of("Removed role \"" + team.getDisplayName().getString() + "\" (no members left)"), true);
 		}
 	}
 
@@ -145,9 +145,8 @@ public class SimpleServerRoles implements ModInitializer {
 			}
 
 			source.sendFeedback(Text.of("Available roles are:"), false);
-			for(Team team : scoreboard.getTeams())
-				if(team.getName().startsWith(TEAM_NAME_PREFIX))
-					source.sendFeedback(Text.of("- " + team.getDisplayName().getString()), false);
+			for(Team team : roles)
+				source.sendFeedback(Text.of("- " + Formatting.FORMATTING_CODE_PREFIX + team.getColor().getCode() + team.getDisplayName().getString() + Formatting.FORMATTING_CODE_PREFIX + Formatting.WHITE.getCode()), false);
 
 			return 1;
 		}))));
@@ -165,7 +164,7 @@ public class SimpleServerRoles implements ModInitializer {
 			// check if already exists
 			Team team = scoreboard.getTeam(id);
 			if(team != null)
-				throw new SimpleCommandExceptionType(Text.of("role already exists")).create();
+				throw new SimpleCommandExceptionType(Text.of("Role already exists")).create();
 			
 			// add team
 			team = scoreboard.addTeam(id);
@@ -173,7 +172,7 @@ public class SimpleServerRoles implements ModInitializer {
 			team.setPrefix(Text.of("[" + name + "] "));
 			List<String> colors = Formatting.getNames(true, false).stream().collect(Collectors.toCollection(LinkedList::new));
 			team.setColor(Formatting.byName(colors.get(this.randomGenerator.nextInt(colors.size())))); // It is assumed, that at least one color exists
-			source.sendFeedback(Text.of("Added role " + name), false);
+			source.sendFeedback(Text.of("Added role \"" + name + "\""), true);
 
 			// join team
 			this.joinRole(source, team);
@@ -194,7 +193,7 @@ public class SimpleServerRoles implements ModInitializer {
 			// check if exists
 			Team team = scoreboard.getTeam(id);
 			if(team == null)
-				throw new SimpleCommandExceptionType(Text.of("role does not exist, use \"list\" to look for them")).create();
+				throw new SimpleCommandExceptionType(Text.of("Role \"" + name + "\" does not exist")).create();
 
 			this.joinRole(source, team);
 			return 1;
@@ -215,23 +214,23 @@ public class SimpleServerRoles implements ModInitializer {
 
 				Team team = this.checkPlayerInRole(source);
 
-				String property = this.checkRoleName(StringArgumentType.getString(context, "property"));
-				String value = this.checkRoleName(StringArgumentType.getString(context, "value"));
+				String property = StringArgumentType.getString(context, "property");
+				String value = StringArgumentType.getString(context, "value");
 				if(property.equals("name")) {
 					this.checkRoleName(value);
 					team.setDisplayName(Text.of(value));
 					team.setPrefix(Text.of("[" + value + "] "));
-					source.sendFeedback(Text.of("Changed role name to " + value), false);
+					source.sendFeedback(Text.of("Changed role \"" + team.getDisplayName().getString() + "\" name to \"" + value + "\""), true);
 				} else if(property.equals("color")) {
 					Formatting color = Formatting.byName(value);
 					if(color == null)
-						throw new SimpleCommandExceptionType(Text.of("unknown color - try one of " + String.join(", ", Formatting.getNames(true, false)))).create();
+						throw new SimpleCommandExceptionType(Text.of("Unknown color - try one of " + String.join(", ", Formatting.getNames(true, false)))).create();
 					if(!color.isColor())
-						throw new SimpleCommandExceptionType(Text.of("value is not a color")).create();
+						throw new SimpleCommandExceptionType(Text.of("Value is not a color")).create();
 					team.setColor(color);
-					source.sendFeedback(Text.of("Changed role color to " + color.name()), false);
+					source.sendFeedback(Text.of("Changed role \"" + team.getDisplayName().getString() + "\" color to " + color.name()), true);
 				} else
-					throw new SimpleCommandExceptionType(Text.of("unknown property")).create();
+					throw new SimpleCommandExceptionType(Text.of("Unknown property")).create();
 				return 1;
 			}
 		))))));
