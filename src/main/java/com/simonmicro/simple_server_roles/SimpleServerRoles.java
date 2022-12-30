@@ -231,9 +231,10 @@ public class SimpleServerRoles implements ModInitializer {
 				String value = StringArgumentType.getString(context, "value");
 				if(property.equals("name")) {
 					this.checkRoleName(value);
+					String oldName = team.getDisplayName().getString();
 					team.setDisplayName(Text.of(value));
 					team.setPrefix(Text.of("[" + value + "] "));
-					source.sendFeedback(Text.of("Changed role \"" + team.getDisplayName().getString() + "\" name to \"" + value + "\""), true);
+					source.sendFeedback(Text.of("Changed role \"" + oldName + "\" name to \"" + value + "\""), true);
 				} else if(property.equals("color")) {
 					Formatting color = Formatting.byName(value);
 					if(color == null)
