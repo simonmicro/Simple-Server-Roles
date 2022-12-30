@@ -146,7 +146,9 @@ public class SimpleServerRoles implements ModInitializer {
 
 			source.sendFeedback(Text.of("Available roles are:"), false);
 			for(Team team : roles)
-				source.sendFeedback(Text.of("- " + Formatting.FORMATTING_CODE_PREFIX + team.getColor().getCode() + team.getDisplayName().getString() + Formatting.FORMATTING_CODE_PREFIX + Formatting.WHITE.getCode()), false);
+				source.sendFeedback(Text.of("- " + Formatting.FORMATTING_CODE_PREFIX + team.getColor().getCode() +
+					team.getDisplayName().getString() + Formatting.FORMATTING_CODE_PREFIX + Formatting.WHITE.getCode() + 
+					" (" + team.getPlayerList().size() + " members)"), false);
 
 			return 1;
 		}))));
